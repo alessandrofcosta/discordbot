@@ -195,7 +195,7 @@ class Musica(commands.Cog):
 
                 elif 'playlist' in query:
                     embed = discord.Embed(
-                        description=f'# ❌ Ainda não é possível colocar playlists do spotify nesse bot, aguarde atualizações.',
+                        description=f'❌ Ainda não é possível colocar playlists do spotify nesse bot, aguarde atualizações.',
                         color=discord.Color(0x000001)
                     )
                     await ctx.send(embed=embed)
