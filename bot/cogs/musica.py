@@ -194,6 +194,12 @@ class Musica(commands.Cog):
                     await self.start_play(ctx, url)
 
                 elif 'playlist' in query:
+                    embed = discord.Embed(
+                        description=f'# ❌ Ainda não é possível colocar playlists do spotify nesse bot, aguarde atualizações.',
+                        color=discord.Color(0x000001)
+                    )
+                    
+                    """  try:
                         embed = discord.Embed(
                             description='🔄 Sua playlist está sendo adicionada... aguarde.',
                             color=discord.Color(0x000001)
@@ -212,6 +218,12 @@ class Musica(commands.Cog):
 
                         if not ctx.voice_client.is_playing() and not ctx.voice_client.is_paused():
                             await self.play_next(ctx)
+                    except:
+                        embed = discord.Embed(
+                        description='❌ Não foi possível carregar sua playlist',
+                        color=discord.Color(0x000001)
+                        )
+                        await ctx.send(embed=embed) """
 
             else:
                 embed = discord.Embed(
@@ -264,9 +276,9 @@ class Musica(commands.Cog):
     async def stop(self, ctx):
         voice_client = ctx.voice_client
         guild_id = ctx.guild.id
+        await voice_client.disconnect()
         if voice_client:
             queue[guild_id].clear()
-            await voice_client.disconnect()
             embed = discord.Embed(
                 description="⛔ Música parada e fila limpa.",
                 color=discord.Color(0x000001)

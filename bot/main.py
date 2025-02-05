@@ -17,7 +17,7 @@ async def on_ready():
     print(f'Bot {bot.user} está online!')
 
 async def load_extension():
-    for filename in os.listdir(r'./cogs'):
+    for filename in os.listdir(r'.!/cogs'):
         if filename not in '__init__.py':
             if filename.endswith('.py'):
                 await bot.load_extension(f'cogs.{filename[:-3]}')
