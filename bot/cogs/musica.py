@@ -198,7 +198,7 @@ class Musica(commands.Cog):
                         description=f'# ❌ Ainda não é possível colocar playlists do spotify nesse bot, aguarde atualizações.',
                         color=discord.Color(0x000001)
                     )
-                    
+                    await ctx.send(embed=embed)
                     """  try:
                         embed = discord.Embed(
                             description='🔄 Sua playlist está sendo adicionada... aguarde.',
