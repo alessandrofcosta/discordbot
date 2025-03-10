@@ -18,7 +18,7 @@ async def on_ready():
 
 async def load_extension():
     for filename in os.listdir(r'./bot/cogs'):
-        if filename not in '__init__.py':
+        if filename != '__init__.py':
             if filename.endswith('.py'):
                 await bot.load_extension(f'cogs.{filename[:-3]}')
 
