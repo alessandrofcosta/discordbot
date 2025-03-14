@@ -22,27 +22,6 @@ class Musica(commands.Cog):
         self.current_url = {}
         self.loop_state = {}
 
-    async def join(self, ctx):
-        if not ctx.author.voice:
-            embed = discord.Embed(
-                description="Você precisa estar em um canal de voz para me chamar!",
-                color=discord.Color(0x000001)
-            )
-            return await ctx.send(embed=embed)
-
-        channel = ctx.author.voice.channel
-
-        if not ctx.guild.me.guild_permissions.connect:
-            return await ctx.send("❌ Não tenho permissão para entrar no canal de voz!")
-
-        if not ctx.guild.me.guild_permissions.speak:
-            return await ctx.send("❌ Não tenho permissão para falar no canal de voz!")
-
-        await channel.connect()
-        await asyncio.sleep(2)
-        if not ctx.voice_client or not ctx.voice_client.is_connected():
-            await ctx.send("Falha ao conectar ao canal de voz.")
-
     async def play_next(self, ctx):
         guild_id = ctx.guild.id
         if guild_id in queue and queue[guild_id]:
@@ -173,6 +152,30 @@ class Musica(commands.Cog):
             'requested_by': ctx.author
         }
         self.add_to_queue(ctx, queue_sp)
+
+    @commands.command(name='join', aliases=['j'], help='Coloca o bot na call.')
+    async def join(self, ctx):
+        if not ctx.author.voice:
+            embed = discord.Embed(
+                description="Você precisa estar em um canal de voz para me chamar!",
+                color=discord.Color(0x000001)
+            )
+            return await ctx.send(embed=embed)
+
+        channel = ctx.author.voice.channel
+
+        if not ctx.guild.me.guild_permissions.connect:
+            return await ctx.send("❌ Não tenho permissão para entrar no canal de voz!")
+
+        if not ctx.guild.me.guild_permissions.speak:
+            return await ctx.send("❌ Não tenho permissão para falar no canal de voz!")
+
+        await channel.connect()
+        await asyncio.sleep(2)
+        if ctx.guild.me.voice and ctx.guild.me.voice.channel.type == discord.ChannelType.stage_voice:
+            await ctx.guild.me.edit(suppress=False)
+        if not ctx.voice_client or not ctx.voice_client.is_connected():
+            await ctx.send("Falha ao conectar ao canal de voz.")
 
     @commands.command(name='play', aliases=['p'], help='Toca a música desejada usando a URL ou o nome da música.')
     async def play(self, ctx, *, query):
