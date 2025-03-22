@@ -171,15 +171,15 @@ class Musica(commands.Cog):
             return await ctx.send("❌ Não tenho permissão para falar no canal de voz!")
 
         await channel.connect()
-        await asyncio.sleep(2)
         if ctx.guild.me.voice and ctx.guild.me.voice.channel.type == discord.ChannelType.stage_voice:
             await ctx.guild.me.edit(suppress=False)
+
+        asyncio.sleep(1)
         if not ctx.voice_client or not ctx.voice_client.is_connected():
             await ctx.send("Falha ao conectar ao canal de voz.")
 
     @commands.command(name='play', aliases=['p'], help='Toca a música desejada usando a URL ou o nome da música.')
     async def play(self, ctx, *, query):
-
         if not ctx.voice_client or not ctx.voice_client.is_connected():
             try:
                 await self.join(ctx)
