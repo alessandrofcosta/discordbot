@@ -88,10 +88,14 @@ class Musica(commands.Cog):
             asyncio.run_coroutine_threadsafe(self.play_next(ctx), self.bot.loop)
 
     def yt_search(self, query):
+        try:
             search = VideosSearch(query, limit=1)
             result = search.result()['result'][0]
             url = result['link']
             return url
+        except Exception as e:
+            print(f"Erro na busca do YouTube: {e}")
+            return None
 
     async def start_play(self, ctx, url):
 
@@ -170,13 +174,19 @@ class Musica(commands.Cog):
         if not ctx.guild.me.guild_permissions.speak:
             return await ctx.send("❌ Não tenho permissão para falar no canal de voz!")
 
-        await channel.connect()
+        try:
+            await channel.connect()
+        except discord.ClientException as e:
+            print(f"Erro ao conectar: {e}")
+            await ctx.send(f"❌ Erro ao conectar ao canal: {e}")
+        except Exception as e:
+            print(f"Erro desconhecido ao conectar: {e}")
+            await ctx.send("❌ Ocorreu um erro inesperado ao tentar conectar ao canal.")
+
         if ctx.guild.me.voice and ctx.guild.me.voice.channel.type == discord.ChannelType.stage_voice:
             await ctx.guild.me.edit(suppress=False)
 
-        asyncio.sleep(1)
-        if not ctx.voice_client or not ctx.voice_client.is_connected():
-            await ctx.send("Falha ao conectar ao canal de voz.")
+        await asyncio.sleep(1)
 
     @commands.command(name='play', aliases=['p'], help='Toca a música desejada usando a URL ou o nome da música.')
     async def play(self, ctx, *, query):
@@ -242,10 +252,17 @@ class Musica(commands.Cog):
                 )
             await ctx.send(embed=embed)
 
-            url = self.yt_search(query)
+            try:
+                url = self.yt_search(query)
+            except:
+                print('nao deu ytseaarch')
 
             self.current_url[ctx.guild.id] = url
-            await self.start_play(ctx, url)
+
+            try:
+                await self.start_play(ctx, url)
+            except:
+                print('nao deu startplay')
 
         else:
             self.current_url[ctx.guild.id] = query
