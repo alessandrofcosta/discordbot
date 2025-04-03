@@ -119,7 +119,7 @@ class RPG(commands.Cog):
         
         if message.webhook_id:
             content = message.content.lower().strip()
-            match = re.match(r'^(?:!rolar|!dado|!dice)\s+(\d+d\d+(?:[+-]\d+)?)$', content, re.IGNORECASE)
+            match = re.match(r'^(?:!rolar|!dado|!dice)\s+(\d+d\d+(?:[+-]\d+){0,10})$', content, re.IGNORECASE)
             if not match:
                 return
             
@@ -127,24 +127,27 @@ class RPG(commands.Cog):
             await self.processar_rolagem(message.channel, comando)
 
     async def processar_rolagem(self, channel, comando: str):
-        match = re.match(r"(\d+)d(\d+)([+-]\d+)?", comando)
+        match = re.match(r"(\d+)d(\d+)((?:[+-]\d+){0,10})", comando)
         if not match:
-            await channel.send("❌ **Formato inválido!** Use algo como `!rolar 2d20+3`")
+            await channel.send("❌ **Formato inválido!** Use algo como `!rolar 2d20+3` ou `1d20+1+2+3`")
             return
 
-        qtd, faces, modificador = match.groups()
+        qtd, faces, modificadores = match.groups()
         qtd, faces = int(qtd), int(faces)
-        modificador = int(modificador) if modificador else 0
-
+        
         if qtd > 100:
             await channel.send("❌ Não pode rolar mais de 100 dados de uma vez!")
             return
         if faces > 1000:
             await channel.send("❌ O dado não pode ter mais de 1000 lados!")
             return
-
+        
         resultados = [random.randint(1, faces) for _ in range(qtd)]
-        total = sum(resultados) + modificador
+        
+        modificadores_lista = [int(m) for m in re.findall(r"[+-]\d+", modificadores)[:10]]
+        modificador_total = sum(modificadores_lista)
+        
+        total = sum(resultados) + modificador_total
         resultado_formatado = f"` {total} ` ⟵ {resultados} {comando}"
 
         await channel.send(resultado_formatado)
