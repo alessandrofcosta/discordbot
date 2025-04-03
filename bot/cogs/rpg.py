@@ -1,4 +1,6 @@
 import discord
+import random
+import re
 from discord.ext import commands
 from discord.ui import View, Button, Modal, TextInput
 
@@ -105,6 +107,47 @@ class RPG(commands.Cog):
         color=discord.Color(0x000001)
         )
         await ctx.send(embed=embed, view=view)
+
+    @commands.command(name='rolar', aliases=['dado', 'dice'], help='Rola um dado no formato XdY+Z.')
+    async def rolar(self, ctx, comando: str):
+        await self.processar_rolagem(ctx, comando)
+
+    @commands.Cog.listener()
+    async def on_message(self, message):
+        if message.author == self.bot.user:
+            return
+        
+        if message.webhook_id:
+            content = message.content.lower().strip()
+            match = re.match(r'^(?:!rolar|!dado|!dice)\s+(\d+d\d+(?:[+-]\d+)?)$', content, re.IGNORECASE)
+            if not match:
+                return
+            
+            comando = match.group(1)
+            await self.processar_rolagem(message.channel, comando)
+
+    async def processar_rolagem(self, channel, comando: str):
+        match = re.match(r"(\d+)d(\d+)([+-]\d+)?", comando)
+        if not match:
+            await channel.send("❌ **Formato inválido!** Use algo como `!rolar 2d20+3`")
+            return
+
+        qtd, faces, modificador = match.groups()
+        qtd, faces = int(qtd), int(faces)
+        modificador = int(modificador) if modificador else 0
+
+        if qtd > 100:
+            await channel.send("❌ Não pode rolar mais de 100 dados de uma vez!")
+            return
+        if faces > 1000:
+            await channel.send("❌ O dado não pode ter mais de 1000 lados!")
+            return
+
+        resultados = [random.randint(1, faces) for _ in range(qtd)]
+        total = sum(resultados) + modificador
+        resultado_formatado = f"` {total} ` ⟵ {resultados} {comando}"
+
+        await channel.send(resultado_formatado)
 
 async def setup(bot):
     await bot.add_cog(RPG(bot))
