@@ -116,41 +116,46 @@ class RPG(commands.Cog):
     async def on_message(self, message):
         if message.author == self.bot.user:
             return
-        
+
         if message.webhook_id:
             content = message.content.lower().strip()
-            match = re.match(r'^(?:!rolar|!dado|!dice)\s+(\d+d\d+(?:[+-]\d+){0,10})$', content, re.IGNORECASE)
+            match = re.search(r'^(?:##\s*\w+\s*)?\s*(?:!rolar|!dado|!dice)\s+(\d+d\d+(?:[+-]\d+){0,10})', content, re.IGNORECASE | re.MULTILINE)
             if not match:
                 return
-            
-            comando = match.group(1)
-            await self.processar_rolagem(message.channel, comando)
 
-    async def processar_rolagem(self, channel, comando: str):
+            comando = match.group(1)
+            await self.processar_rolagem(message, comando)  # passa a mensagem, não o canal
+
+    async def processar_rolagem(self, origem, comando: str):
         match = re.match(r"(\d+)d(\d+)((?:[+-]\d+){0,10})", comando)
         if not match:
-            await channel.send("❌ **Formato inválido!** Use algo como `!rolar 2d20+3` ou `1d20+1+2+3`")
+            await self._responder(origem, "❌ **Formato inválido!** Use algo como `!rolar 2d20+3` ou `1d20+1+2+3`")
             return
 
         qtd, faces, modificadores = match.groups()
         qtd, faces = int(qtd), int(faces)
-        
+
         if qtd > 100:
-            await channel.send("❌ Não pode rolar mais de 100 dados de uma vez!")
+            await self._responder(origem, "❌ Não pode rolar mais de 100 dados de uma vez!")
             return
         if faces > 1000:
-            await channel.send("❌ O dado não pode ter mais de 1000 lados!")
+            await self._responder(origem, "❌ O dado não pode ter mais de 1000 lados!")
             return
-        
+
         resultados = [random.randint(1, faces) for _ in range(qtd)]
-        
         modificadores_lista = [int(m) for m in re.findall(r"[+-]\d+", modificadores)[:10]]
         modificador_total = sum(modificadores_lista)
-        
+
         total = sum(resultados) + modificador_total
         resultado_formatado = f"` {total} ` ⟵ {resultados} {comando}"
 
-        await channel.send(resultado_formatado)
+        await self._responder(origem, resultado_formatado)
+
+    async def _responder(self, origem, mensagem: str):
+        if isinstance(origem, commands.Context):
+            await origem.send(mensagem)
+        elif isinstance(origem, discord.Message):
+            await origem.channel.send(mensagem, reference=origem)
 
 async def setup(bot):
     await bot.add_cog(RPG(bot))
