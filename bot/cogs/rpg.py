@@ -147,7 +147,11 @@ class RPG(commands.Cog):
         modificador_total = sum(modificadores_lista)
 
         total = sum(resultados) + modificador_total
-        resultado_formatado = f"` {total} ` ⟵ {resultados} {comando}"
+        resultados_formatados = [
+            f"**{r}**" if r == faces else str(r)
+            for r in resultados
+        ]
+        resultado_formatado = f"` {total} ` ⟵ [{', '.join(resultados_formatados)}] {comando}"
 
         await self._responder(origem, resultado_formatado)
 
