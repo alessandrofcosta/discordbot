@@ -146,14 +146,46 @@ class RPG(commands.Cog):
         modificadores_lista = [int(m) for m in re.findall(r"[+-]\d+", modificadores)[:10]]
         modificador_total = sum(modificadores_lista)
 
-        total = sum(resultados) + modificador_total
-        resultados_formatados = [
-            f"**{r}**" if r == faces or r == 1 else str(r)
-            for r in resultados
-        ]
-        resultado_formatado = f"` {total} ` ⟵ [{', '.join(resultados_formatados)}] {comando}"
+        soma_dados = sum(resultados)  
+        total = soma_dados + modificador_total
+
+        prefixo = ""
+
+        if qtd == 1 and faces == 20 and resultados[0] == 1:
+            prefixo = "`FALHA CRÍTICA`"
+
+        elif qtd == 1 and faces == 20 and soma_dados == 20:
+            prefixo = "`SUCESSO CRÍTICO`"
+
+        elif qtd == 2 and faces == 20 and soma_dados == 2:
+            prefixo = "`FALHA CRÍTICA DUPLA`"
+
+        elif qtd == 2 and faces == 20 and 3 <= soma_dados <= 7:
+            prefixo = "`FALHA CRÍTICA`"
+
+
+        elif qtd == 2 and faces == 20 and 35 <= soma_dados <= 39:
+            prefixo = "`SUCESSO CRÍTICO`"
+
+
+        elif qtd == 2 and faces == 20 and soma_dados == 40:
+            prefixo = "`SUCESSO CRÍTICO DUPLO`"
+
+
+        if prefixo:
+
+            resultados_formatados = [f"**{r}**" for r in resultados]
+        else:
+
+            resultados_formatados = [
+                f"**{r}**" if r == 1 or r == faces else str(r)
+                for r in resultados
+            ]
+
+        resultado_formatado = f"` {total} ` ⟵ [{', '.join(resultados_formatados)}] {comando} {prefixo}"
 
         await self._responder(origem, resultado_formatado)
+
 
     async def _responder(self, origem, mensagem: str):
         if isinstance(origem, commands.Context):
