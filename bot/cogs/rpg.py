@@ -119,7 +119,12 @@ class RPG(commands.Cog):
 
         if message.webhook_id:
             content = message.content.lower().strip()
-            match = re.search(r'^(?:##\s*\w+\s*)?\s*(?:!rolar|!dado|!dice)\s+(\d+d\d+(?:[+-]\d+){0,10})', content, re.IGNORECASE | re.MULTILINE)
+            match = re.search(
+                r'^(?:##\s*\w+\s*)?\s*(?:!rolar|!dado|!dice)\s+(\d+d\d+(?:[+-](?:\d+d\d+|\d+))*)',
+                content,
+                re.IGNORECASE | re.MULTILINE
+            )
+
             if not match:
                 return
 
@@ -127,64 +132,86 @@ class RPG(commands.Cog):
             await self.processar_rolagem(message, comando)  # passa a mensagem, não o canal
 
     async def processar_rolagem(self, origem, comando: str):
-        match = re.match(r"(\d+)d(\d+)((?:[+-]\d+){0,10})", comando)
-        if not match:
-            await self._responder(origem, "❌ **Formato inválido!** Use algo como `!rolar 2d20+3` ou `1d20+1+2+3`")
+        comando = comando.replace(" ", "")
+
+        dados_tokens = re.findall(r'[+-]?\d+d\d+', comando)
+        if not dados_tokens:
+            await self._responder(origem, "❌ **Formato inválido!** Use algo como `2d20+2+3d5`")
             return
 
-        qtd, faces, modificadores = match.groups()
-        qtd, faces = int(qtd), int(faces)
+        grupos_dados = []
+        soma_dados = 0
 
-        if qtd > 100:
-            await self._responder(origem, "❌ Não pode rolar mais de 100 dados de uma vez!")
-            return
-        if faces > 1000:
-            await self._responder(origem, "❌ O dado não pode ter mais de 1000 lados!")
-            return
+        for token in dados_tokens:
+            sinal = -1 if token.startswith("-") else 1
+            token_limpo = token.lstrip("+-")
 
-        resultados = [random.randint(1, faces) for _ in range(qtd)]
-        modificadores_lista = [int(m) for m in re.findall(r"[+-]\d+", modificadores)[:10]]
-        modificador_total = sum(modificadores_lista)
+            qtd, faces = map(int, token_limpo.split("d"))
 
-        soma_dados = sum(resultados)  
+            if qtd > 100:
+                await self._responder(origem, "❌ Não pode rolar mais de 100 dados de uma vez!")
+                return
+            if faces > 1000:
+                await self._responder(origem, "❌ O dado não pode ter mais de 1000 lados!")
+                return
+
+            rolagens = [random.randint(1, faces) for _ in range(qtd)]
+            soma_dados += sum(rolagens) * sinal
+
+            grupos_dados.append({
+                "token": token_limpo,
+                "rolagens": rolagens,
+                "sinal": sinal
+            })
+
+        # modificadores numéricos (+2, -5 etc)
+        modificadores = re.findall(r'[+-]\d+(?!d)', comando)
+        modificador_total = sum(int(m) for m in modificadores)
+
         total = soma_dados + modificador_total
 
+        # ---------- CRÍTICOS ----------
         prefixo = ""
 
-        if qtd == 1 and faces == 20 and resultados[0] == 1:
-            prefixo = "`FALHA CRÍTICA`"
+        d20s = []
+        for g in grupos_dados:
+            if g["token"].endswith("d20"):
+                d20s.extend(g["rolagens"])
 
-        elif qtd == 1 and faces == 20 and soma_dados == 20:
-            prefixo = "`SUCESSO CRÍTICO`"
+        if len(d20s) == 1:
+            if d20s[0] == 1:
+                prefixo = "`FALHA CRÍTICA`"
+            elif d20s[0] == 20:
+                prefixo = "`SUCESSO CRÍTICO`"
 
-        elif qtd == 2 and faces == 20 and soma_dados == 2:
-            prefixo = "`FALHA CRÍTICA DUPLA`"
+        elif len(d20s) == 2:
+            soma20 = sum(d20s)
+            if soma20 == 2:
+                prefixo = "`FALHA CRÍTICA DUPLA`"
+            elif 3 <= soma20 <= 7:
+                prefixo = "`FALHA CRÍTICA`"
+            elif 35 <= soma20 <= 39:
+                prefixo = "`SUCESSO CRÍTICO`"
+            elif soma20 == 40:
+                prefixo = "`SUCESSO CRÍTICO DUPLO`"
 
-        elif qtd == 2 and faces == 20 and 3 <= soma_dados <= 7:
-            prefixo = "`FALHA CRÍTICA`"
+        # ---------- FORMATAÇÃO ----------
+        partes = []
 
+        for g in grupos_dados:
+            qtd, faces = map(int, g["token"].split("d"))
 
-        elif qtd == 2 and faces == 20 and 35 <= soma_dados <= 39:
-            prefixo = "`SUCESSO CRÍTICO`"
-
-
-        elif qtd == 2 and faces == 20 and soma_dados == 40:
-            prefixo = "`SUCESSO CRÍTICO DUPLO`"
-
-
-        if prefixo:
-
-            resultados_formatados = [f"**{r}**" for r in resultados]
-        else:
-
-            resultados_formatados = [
+            rolls = ", ".join(
                 f"**{r}**" if r == 1 or r == faces else str(r)
-                for r in resultados
-            ]
+                for r in g["rolagens"]
+                )
+            partes.append(f"[{rolls}] {g['token']}")
 
-        resultado_formatado = f"` {total} ` ⟵ [{', '.join(resultados_formatados)}] {comando} {prefixo}"
+        if modificador_total != 0:
+            partes.append(str(modificador_total))
 
-        await self._responder(origem, resultado_formatado)
+        resposta = f"` {total} ` ⟵ " + " + ".join(partes) + f" {prefixo}"
+        await self._responder(origem, resposta)
 
 
     async def _responder(self, origem, mensagem: str):
