@@ -198,13 +198,17 @@ class RPG(commands.Cog):
         elif len(d20s) == 3:
             soma20 = sum(d20s)
             if soma20 == 3:
+                prefixo = "`FALHA CRÍTICA TRIPLA`"
+            elif 4 <= soma20 <= 7:
                 prefixo = "`FALHA CRÍTICA DUPLA`"
-            elif 3 <= soma20 <= 7:
+            elif 8 <= soma20 <= 14:
                 prefixo = "`FALHA CRÍTICA`"
-            elif 35 <= soma20 <= 39:
+            elif 48 <= soma20 <= 55:
                 prefixo = "`SUCESSO CRÍTICO`"
-            elif soma20 == 40:
+            elif 56 <= soma20 <= 59:
                 prefixo = "`SUCESSO CRÍTICO DUPLO`"
+            elif soma20 == 60:
+                prefixo = "`SUCESSO CRÍTICO TRIPLO`"
 
         # ---------- FORMATAÇÃO ----------
         partes = []
