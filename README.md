@@ -6,24 +6,27 @@ This is a Discord bot developed in Python using the `discord.py` library. It has
 
 ## Features
 
+All commands now work in both formats:
+- Prefix command in chat (example: `!play`)
+- Slash command (example: `/play`)
+
 ### General Commands
 
-- `!hello` - The bot responds with a greeting message.
-- `!help` - Displays all available commands in an organized manner.
+- `!hello` or `/hello` - The bot responds with a greeting message.
+- `!help` or `/help` - Displays all available commands in an organized manner.
 
 ### Music Commands
 
-- `!play <name/url>` - Plays a song from YouTube or Spotify.
-- `!skip` - Skips the current song.
-- `!stop` - Stops playback and disconnects the bot from the voice channel.
-- `!queue` - Displays the song queue.
-- `!shuffle` - Shuffles the song queue.
-- `!loop` - Toggles looping for the current song.
+- `!play <name/url>` or `/play <name/url>` - Plays a song from YouTube or Spotify.
+- `!skip` or `/skip` - Skips the current song.
+- `!stop` or `/stop` - Stops playback and disconnects the bot from the voice channel.
+- `!queue` or `/queue` - Displays the song queue.
+- `!shuffle` or `/shuffle` - Shuffles the song queue.
+- `!loop` or `/loop` - Toggles looping for the current song.
 
 ### RPG Commands
 
-- `!resist` - Calculates damage taken based on resistance.
-- `!resistbruto` - Calculates only raw resistance.
+- `!rolar <XdY+Z>` or `/rolar <XdY+Z>` - Rolls dice using expressions such as `2d20+2+1d6`.
 
 ## Installation
 

@@ -11,9 +11,14 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.voice_states = True
 bot = commands.Bot(command_prefix="!", intents=intents)
+synced = False
 
 @bot.event
 async def on_ready():
+    global synced
+    if not synced:
+        await bot.tree.sync()
+        synced = True
     print(f'Bot {bot.user} está online!')
 
 async def load_extension():
