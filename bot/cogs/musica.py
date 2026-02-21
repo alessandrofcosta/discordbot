@@ -7,13 +7,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 CLIENT_ID = os.getenv("SP_CLIENT_ID")
-CLIENT_SECRET = os.getenv("SP_CLIENT_SECRET")    
+CLIENT_SECRET = os.getenv("SP_CLIENT_SECRET")
 
 queue = {}
-sp = Spotify(auth_manager=SpotifyClientCredentials(
-    client_id=CLIENT_ID,
-    client_secret=CLIENT_SECRET)
-    )
+sp = None
+
+if CLIENT_ID and CLIENT_SECRET:
+    sp = Spotify(auth_manager=SpotifyClientCredentials(
+        client_id=CLIENT_ID,
+        client_secret=CLIENT_SECRET)
+        )
 
 class Musica(commands.Cog):
     def __init__(self, bot):
@@ -157,17 +160,33 @@ class Musica(commands.Cog):
         return bool(url_pattern.match(text))
     
     async def process_track(self, ctx, item):
-        track = item['track']
-        query = f"{track['name']} {track['artists'][0]['name']}"
+        track = item.get('track')
+        if not track:
+            return
+
+        artists = track.get('artists', [])
+        if not artists:
+            return
+
+        artist_name = artists[0].get('name')
+        if not artist_name:
+            return
+
+        query = f"{track['name']} {artist_name}"
         url = self.yt_search(query)
+        if not url:
+            return
+
         self.current_url[ctx.guild.id] = url
-        queue_sp = {
-            'true_url': self.current_url[ctx.guild.id],
+        queue_entry = {
+            'true_url': url,
             'url': url,
-            'title': track['name'],
+            'title': f"{track['name']} - {artist_name}",
             'requested_by': ctx.author
-        }
-        self.add_to_queue(ctx, queue_sp)
+            }
+        if ctx.guild.id not in queue:
+            queue[ctx.guild.id] = []
+        queue[ctx.guild.id].append(queue_entry)
 
     @commands.command(name='join', aliases=['j'], help='Coloca o bot na call.')
     async def join(self, ctx):
@@ -210,45 +229,85 @@ class Musica(commands.Cog):
                 await ctx.send(f"Erro ao conectar ao canal de voz: {e}")
 
         if 'spotify.com' in query:
+            if not sp:
+                embed = discord.Embed(
+                    description='❌ Spotify não configurado. Defina SP_CLIENT_ID e SP_CLIENT_SECRET no .env.',
+                    color=discord.Color(0x000001)
+                    )
+                return await ctx.send(embed=embed)
+
             if self.is_url(query):
                 if 'track' in query:
-                    track = sp.track(query)
+                    try:
+                        track = sp.track(query)
+                    except Exception:
+                        embed = discord.Embed(
+                            description='❌ Não foi possível carregar essa música do Spotify.',
+                            color=discord.Color(0x000001)
+                            )
+                        return await ctx.send(embed=embed)
+
                     query = f"{track['name']} {track['artists'][0]['name']}"
                     url = self.yt_search(query)
+                    if not url:
+                        embed = discord.Embed(
+                            description='❌ Não foi possível encontrar essa música no YouTube.',
+                            color=discord.Color(0x000001)
+                            )
+                        return await ctx.send(embed=embed)
                     self.current_url[ctx.guild.id] = url
                     await self.start_play(ctx, url)
 
                 elif 'playlist' in query:
-                    embed = discord.Embed(
-                        description=f'❌ Ainda não é possível colocar playlists do spotify nesse bot, aguarde atualizações.',
-                        color=discord.Color(0x000001)
-                    )
-                    await ctx.send(embed=embed)
-                    """  try:
+                    try:
                         embed = discord.Embed(
                             description='🔄 Sua playlist está sendo adicionada... aguarde.',
                             color=discord.Color(0x000001)
-                        )
+                            )
                         await ctx.send(embed=embed)
 
-                        playlist = sp.playlist_items(query)['items']
-                        
-                        await asyncio.gather(*[self.process_track(ctx, item) for item in playlist])
+                        playlist_items = []
+                        offset = 0
+                        while True:
+                            response = sp.playlist_items(query, offset=offset)
+                            current_items = response.get('items', [])
+                            playlist_items.extend(current_items)
+
+                            if not response.get('next'):
+                                break
+
+                            offset += len(current_items)
+                            if not current_items:
+                                break
+
+                        before_count = len(queue.get(ctx.guild.id, []))
+
+                        for item in playlist_items:
+                            await self.process_track(ctx, item)
+
+                        added_count = len(queue.get(ctx.guild.id, [])) - before_count
+
+                        if added_count == 0:
+                            embed = discord.Embed(
+                                description='❌ Não foi possível adicionar músicas dessa playlist.',
+                                color=discord.Color(0x000001)
+                                )
+                            return await ctx.send(embed=embed)
 
                         embed = discord.Embed(
-                            description=f'# ✅ Playlist adicionada!\nTotal de músicas na fila: **{len(playlist)}**',
+                            description=f'✅ Playlist adicionada!\nMúsicas adicionadas: **{added_count}**',
                             color=discord.Color(0x000001)
-                        )
+                            )
                         await ctx.send(embed=embed)
 
                         if not ctx.voice_client.is_playing() and not ctx.voice_client.is_paused():
                             await self.play_next(ctx)
-                    except:
+                    except Exception:
                         embed = discord.Embed(
-                        description='❌ Não foi possível carregar sua playlist',
-                        color=discord.Color(0x000001)
-                        )
-                        await ctx.send(embed=embed) """
+                            description='❌ Não foi possível carregar sua playlist do Spotify.',
+                            color=discord.Color(0x000001)
+                            )
+                        await ctx.send(embed=embed)
 
             else:
                 embed = discord.Embed(
