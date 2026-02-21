@@ -273,7 +273,7 @@ class Musica(commands.Cog):
             }
         queue[ctx.guild.id].append(queue_entry)
 
-    @commands.command(name='join', aliases=['j'], help='Coloca o bot na call.')
+    @commands.hybrid_command(name='join', aliases=['j'], help='Coloca o bot na call.')
     async def join(self, ctx):
         if not ctx.author.voice:
             embed = discord.Embed(
@@ -304,7 +304,7 @@ class Musica(commands.Cog):
 
         await asyncio.sleep(1)
 
-    @commands.command(name='play', aliases=['p'], help='Toca a música desejada usando a URL ou o nome da música.')
+    @commands.hybrid_command(name='play', aliases=['p'], help='Toca a música desejada usando a URL ou o nome da música.')
     async def play(self, ctx, *, query):
         if not ctx.voice_client or not ctx.voice_client.is_connected():
             try:
@@ -477,7 +477,7 @@ class Musica(commands.Cog):
             await self.start_play(ctx, normalized_url)
             
     
-    @commands.command(name='skip', aliases=['s'], help='Pula a música que está atualmente tocando.')
+    @commands.hybrid_command(name='skip', aliases=['s'], help='Pula a música que está atualmente tocando.')
     async def skip(self, ctx):
         voice_client = ctx.voice_client
         guild_id = ctx.guild.id
@@ -500,7 +500,7 @@ class Musica(commands.Cog):
         await ctx.send(embed=embed)
         voice_client.stop()
             
-    @commands.command(name='stop', help='Pare as músicas e desconecte o bot da call.')
+    @commands.hybrid_command(name='stop', help='Pare as músicas e desconecte o bot da call.')
     async def stop(self, ctx):
         voice_client = ctx.voice_client
         guild_id = ctx.guild.id
@@ -519,7 +519,7 @@ class Musica(commands.Cog):
                 )
             await ctx.send(embed=embed)
 
-    @commands.command(name='queue', help='Use para ver a ordem das músicas.')
+    @commands.hybrid_command(name='queue', help='Use para ver a ordem das músicas.')
     async def queue(self, ctx):
         if ctx.voice_client and ctx.voice_client.is_playing():
             pages = self.build_queue_pages(ctx.guild.id)
@@ -533,7 +533,7 @@ class Musica(commands.Cog):
                 )
             await ctx.send(embed=embed)
 
-    @commands.command(name='shuffle', help='Mistura sua queue de músicas.')
+    @commands.hybrid_command(name='shuffle', help='Mistura sua queue de músicas.')
     async def shuffle(self, ctx):
         random.shuffle(queue[ctx.guild.id])
         embed = discord.Embed(
@@ -542,7 +542,7 @@ class Musica(commands.Cog):
             )
         await ctx.send(embed=embed)
 
-    @commands.command(name='loop', help='Ativa/Desativa o loop da musica.')
+    @commands.hybrid_command(name='loop', help='Ativa/Desativa o loop da musica.')
     async def loop(self, ctx):
         guild_id = ctx.guild.id
         if guild_id not in self.loop_state:

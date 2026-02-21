@@ -6,11 +6,11 @@ class Geral(commands.Cog):
     def __init__(self, bot):
         self.bot = bot      
 
-    @commands.command(name='hello', help='Diz olá!')
+    @commands.hybrid_command(name='hello', help='Diz olá!')
     async def hello(self, ctx):
         await ctx.send(f'Ola {ctx.author.mention}')
     
-    @commands.command(name='help', help='Mostra todos os comandos disponiveis')
+    @commands.hybrid_command(name='help', help='Mostra todos os comandos disponiveis')
     async def help(self, ctx):
         embed = discord.Embed(title="Comandos", color=discord.Color(0x00000f))
 
