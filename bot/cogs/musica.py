@@ -1,4 +1,5 @@
 import discord, yt_dlp, asyncio, random, re, os
+from urllib.parse import urlparse
 from youtubesearchpython import VideosSearch
 from discord.ext import commands
 from spotipy import Spotify
@@ -24,6 +25,66 @@ class Musica(commands.Cog):
         self.current_song = {}
         self.current_url = {}
         self.loop_state = {}
+
+    def ensure_guild_queue(self, guild_id):
+        if guild_id not in queue:
+            queue[guild_id] = []
+
+    def parse_spotify_resource(self, query):
+        parsed = urlparse(query)
+        path_parts = [part for part in parsed.path.split('/') if part]
+
+        if len(path_parts) >= 3 and path_parts[0].startswith('intl-'):
+            path_parts = path_parts[1:]
+
+        if len(path_parts) < 2:
+            return None, None
+
+        resource_type = path_parts[-2]
+        resource_id = path_parts[-1]
+
+        if resource_type not in ('track', 'playlist', 'album'):
+            return None, None
+
+        return resource_type, resource_id
+
+    def get_spotify_track_query(self, track):
+        if not track:
+            return None
+
+        artists = track.get('artists', [])
+        if not artists:
+            return None
+
+        track_name = track.get('name')
+        artist_name = artists[0].get('name')
+        if not track_name or not artist_name:
+            return None
+
+        return f"{track_name} {artist_name}"
+
+    def fetch_spotify_playlist_items(self, playlist_id):
+        playlist_items = []
+        offset = 0
+
+        while True:
+            response = sp.playlist_items(
+                playlist_id,
+                offset=offset,
+                limit=100,
+                fields='items(track(name,artists(name))),next'
+            )
+            current_items = response.get('items', [])
+            playlist_items.extend(current_items)
+
+            if not response.get('next'):
+                break
+
+            offset += len(current_items)
+            if not current_items:
+                break
+
+        return playlist_items
 
     async def play_next(self, ctx):
         guild_id = ctx.guild.id
@@ -83,8 +144,7 @@ class Musica(commands.Cog):
         future.add_done_callback(_log_future_exception)
 
     def add_to_queue(self, ctx, info):
-        if ctx.guild.id not in queue:
-            queue[ctx.guild.id] = []
+        self.ensure_guild_queue(ctx.guild.id)
         queue[ctx.guild.id].append({
             'true_url': self.current_url[ctx.guild.id],
             'url': info['url'],
@@ -161,31 +221,21 @@ class Musica(commands.Cog):
     
     async def process_track(self, ctx, item):
         track = item.get('track')
-        if not track:
+        query = self.get_spotify_track_query(track)
+        if not query:
             return
 
-        artists = track.get('artists', [])
-        if not artists:
-            return
-
-        artist_name = artists[0].get('name')
-        if not artist_name:
-            return
-
-        query = f"{track['name']} {artist_name}"
         url = self.yt_search(query)
         if not url:
             return
 
-        self.current_url[ctx.guild.id] = url
+        self.ensure_guild_queue(ctx.guild.id)
         queue_entry = {
             'true_url': url,
             'url': url,
-            'title': f"{track['name']} - {artist_name}",
+            'title': query,
             'requested_by': ctx.author
             }
-        if ctx.guild.id not in queue:
-            queue[ctx.guild.id] = []
         queue[ctx.guild.id].append(queue_entry)
 
     @commands.command(name='join', aliases=['j'], help='Coloca o bot na call.')
@@ -237,9 +287,11 @@ class Musica(commands.Cog):
                 return await ctx.send(embed=embed)
 
             if self.is_url(query):
-                if 'track' in query:
+                spotify_type, spotify_id = self.parse_spotify_resource(query)
+
+                if spotify_type == 'track' and spotify_id:
                     try:
-                        track = sp.track(query)
+                        track = sp.track(spotify_id)
                     except Exception:
                         embed = discord.Embed(
                             description='❌ Não foi possível carregar essa música do Spotify.',
@@ -247,8 +299,15 @@ class Musica(commands.Cog):
                             )
                         return await ctx.send(embed=embed)
 
-                    query = f"{track['name']} {track['artists'][0]['name']}"
-                    url = self.yt_search(query)
+                    track_query = self.get_spotify_track_query(track)
+                    if not track_query:
+                        embed = discord.Embed(
+                            description='❌ Não foi possível interpretar essa música do Spotify.',
+                            color=discord.Color(0x000001)
+                            )
+                        return await ctx.send(embed=embed)
+
+                    url = self.yt_search(track_query)
                     if not url:
                         embed = discord.Embed(
                             description='❌ Não foi possível encontrar essa música no YouTube.',
@@ -258,7 +317,7 @@ class Musica(commands.Cog):
                     self.current_url[ctx.guild.id] = url
                     await self.start_play(ctx, url)
 
-                elif 'playlist' in query:
+                elif spotify_type == 'playlist' and spotify_id:
                     try:
                         embed = discord.Embed(
                             description='🔄 Sua playlist está sendo adicionada... aguarde.',
@@ -266,19 +325,7 @@ class Musica(commands.Cog):
                             )
                         await ctx.send(embed=embed)
 
-                        playlist_items = []
-                        offset = 0
-                        while True:
-                            response = sp.playlist_items(query, offset=offset)
-                            current_items = response.get('items', [])
-                            playlist_items.extend(current_items)
-
-                            if not response.get('next'):
-                                break
-
-                            offset += len(current_items)
-                            if not current_items:
-                                break
+                        playlist_items = self.fetch_spotify_playlist_items(spotify_id)
 
                         before_count = len(queue.get(ctx.guild.id, []))
 
@@ -309,6 +356,52 @@ class Musica(commands.Cog):
                             )
                         await ctx.send(embed=embed)
 
+                elif spotify_type == 'album' and spotify_id:
+                    try:
+                        embed = discord.Embed(
+                            description='🔄 Seu álbum está sendo adicionado... aguarde.',
+                            color=discord.Color(0x000001)
+                            )
+                        await ctx.send(embed=embed)
+
+                        album = sp.album(spotify_id)
+                        tracks = album.get('tracks', {}).get('items', [])
+
+                        before_count = len(queue.get(ctx.guild.id, []))
+
+                        for track in tracks:
+                            await self.process_track(ctx, {'track': track})
+
+                        added_count = len(queue.get(ctx.guild.id, [])) - before_count
+
+                        if added_count == 0:
+                            embed = discord.Embed(
+                                description='❌ Não foi possível adicionar músicas desse álbum.',
+                                color=discord.Color(0x000001)
+                                )
+                            return await ctx.send(embed=embed)
+
+                        embed = discord.Embed(
+                            description=f'✅ Álbum adicionado!\nMúsicas adicionadas: **{added_count}**',
+                            color=discord.Color(0x000001)
+                            )
+                        await ctx.send(embed=embed)
+
+                        if not ctx.voice_client.is_playing() and not ctx.voice_client.is_paused():
+                            await self.play_next(ctx)
+                    except Exception:
+                        embed = discord.Embed(
+                            description='❌ Não foi possível carregar seu álbum do Spotify.',
+                            color=discord.Color(0x000001)
+                            )
+                        await ctx.send(embed=embed)
+
+                else:
+                    embed = discord.Embed(
+                        description='URL do Spotify não suportada. Use track, playlist ou álbum.',
+                        color=discord.Color(0x000001)
+                        )
+                    await ctx.send(embed=embed)
             else:
                 embed = discord.Embed(
                     description='URL não suportado.',
