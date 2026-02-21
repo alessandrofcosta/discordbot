@@ -1,5 +1,5 @@
 import discord, yt_dlp, asyncio, random, re, os
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from youtubesearchpython import VideosSearch
 from discord.ext import commands
 from spotipy import Spotify
@@ -62,6 +62,19 @@ class Musica(commands.Cog):
             return None
 
         return f"{track_name} {artist_name}"
+
+    def build_queue_pages(self, guild_id, page_size=10):
+        queue_lines = [
+            f"1 - **{self.current_song[guild_id].get('title', 'Sem título')}** *Tocando agora*"
+        ]
+
+        for index, song in enumerate(queue[guild_id], start=2):
+            queue_lines.append(f"{index} - **{song.get('title', 'Sem título')}**")
+
+        return [
+            queue_lines[i:i + page_size]
+            for i in range(0, len(queue_lines), page_size)
+        ]
 
     def fetch_spotify_playlist_items(self, playlist_id):
         playlist_items = []
@@ -218,6 +231,28 @@ class Musica(commands.Cog):
             r'(:\d+)?(\/.*)?$'
         )
         return bool(url_pattern.match(text))
+
+
+    def normalize_youtube_url(self, url):
+        parsed_url = urlparse(url)
+        domain = parsed_url.netloc.lower().replace('www.', '')
+        query_params = parse_qs(parsed_url.query, keep_blank_values=True)
+
+        is_youtu_be = domain == 'youtu.be'
+        has_video_on_watch = 'v' in query_params and query_params['v']
+        has_video_on_short = is_youtu_be and parsed_url.path.strip('/')
+
+        has_single_video = has_video_on_watch or has_video_on_short
+
+        if 'list' in query_params and has_single_video:
+            for param in ('list', 'index', 'start_radio'):
+                query_params.pop(param, None)
+
+            clean_query = urlencode(query_params, doseq=True)
+            cleaned_url = urlunparse(parsed_url._replace(query=clean_query))
+            return cleaned_url, True
+
+        return url, False
     
     async def process_track(self, ctx, item):
         track = item.get('track')
@@ -429,8 +464,17 @@ class Musica(commands.Cog):
                 print('nao deu startplay')
 
         else:
-            self.current_url[ctx.guild.id] = query
-            await self.start_play(ctx, query)
+            normalized_url, removed_playlist_context = self.normalize_youtube_url(query)
+            self.current_url[ctx.guild.id] = normalized_url
+
+            if removed_playlist_context:
+                embed = discord.Embed(
+                    description='ℹ️ Detectei parâmetros de playlist no link e removi para tocar apenas o vídeo enviado.',
+                    color=discord.Color(0x000001)
+                )
+                await ctx.send(embed=embed)
+
+            await self.start_play(ctx, normalized_url)
             
     
     @commands.command(name='skip', aliases=['s'], help='Pula a música que está atualmente tocando.')
@@ -477,27 +521,11 @@ class Musica(commands.Cog):
 
     @commands.command(name='queue', help='Use para ver a ordem das músicas.')
     async def queue(self, ctx):
-        queue_list = []
         if ctx.voice_client and ctx.voice_client.is_playing():
-            queue_list.append(f"1 - **{self.current_song[ctx.guild.id].get('title', 'Sem título')}** *Tocando agora*")
-            for i, title in enumerate(queue[ctx.guild.id]):
-                queue_list.append(f"{i+2} - **{title.get('title', 'Sem título')}**")
-
-            queue_message = '\n'.join(queue_list)
-            try:
-                embed = discord.Embed(
-                title="Lista de músicas:",
-                description=queue_message,
-                color=discord.Color(0x000001)
-                )
-
-                await ctx.send(embed=embed)
-            except:
-                embed = discord.Embed(
-                    description='Sua queue é muito grande para ser enviada, aguarde atualizações que isso será corrigido.',
-                    color=discord.Color(0x000001)
-                    )
-                await ctx.send(embed=embed)
+            pages = self.build_queue_pages(ctx.guild.id)
+            view = QueuePaginationView(ctx.author.id, pages)
+            message = await ctx.send(embed=view._build_embed(), view=view)
+            view.message = message
         else:
             embed = discord.Embed(
                 description='Sem músicas na lista, adicione usando "!play"',
@@ -537,6 +565,56 @@ class Musica(commands.Cog):
             await ctx.send(embed=embed)
 
         
+
+class QueuePaginationView(discord.ui.View):
+    def __init__(self, author_id, pages):
+        super().__init__(timeout=120)
+        self.author_id = author_id
+        self.pages = pages
+        self.current_page = 0
+        self._update_buttons()
+
+    def _build_embed(self):
+        embed = discord.Embed(
+            title="Lista de músicas:",
+            description='\n'.join(self.pages[self.current_page]),
+            color=discord.Color(0x000001)
+        )
+        embed.set_footer(text=f"Página {self.current_page + 1}/{len(self.pages)}")
+        return embed
+
+    def _update_buttons(self):
+        self.previous_button.disabled = self.current_page == 0
+        self.next_button.disabled = self.current_page >= len(self.pages) - 1
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.author_id:
+            await interaction.response.send_message(
+                'Somente quem executou o comando pode trocar de página.',
+                ephemeral=True
+            )
+            return False
+        return True
+
+    async def on_timeout(self):
+        for button in self.children:
+            button.disabled = True
+
+        if hasattr(self, 'message'):
+            await self.message.edit(view=self)
+
+    @discord.ui.button(label='⬅️ Anterior', style=discord.ButtonStyle.secondary)
+    async def previous_button(self, interaction, button):
+        self.current_page -= 1
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self._build_embed(), view=self)
+
+    @discord.ui.button(label='Próxima ➡️', style=discord.ButtonStyle.secondary)
+    async def next_button(self, interaction, button):
+        self.current_page += 1
+        self._update_buttons()
+        await interaction.response.edit_message(embed=self._build_embed(), view=self)
+
 
 async def setup(bot):
     await bot.add_cog(Musica(bot))
