@@ -50,22 +50,34 @@ class Musica(commands.Cog):
                         color=discord.Color(0x000001)
                         )
                     await ctx.send(embed=embed)
-                    await self.play_next
+                    await self.play_next(ctx)
+                    return
                 if ctx.voice_client:
                     ffmpeg_options = {
-                        'options': '-vn',
+                        'options': '-vn -nostdin',
                         "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
                     }
                     ctx.voice_client.play(
-                        discord.FFmpegPCMAudio(url, **ffmpeg_options),after=lambda e: asyncio.create_task(self.after_song(ctx, e), self.bot.loop)
+                        discord.FFmpegPCMAudio(url, **ffmpeg_options),
+                        after=lambda e: self._schedule_after_song(ctx, e)
                         )
                     embed = discord.Embed(
-                        description=f'Tocando agora: [**{song['title']}**]({self.current_url[guild_id]})',
+                        description=f"Tocando agora: [**{song['title']}**]({song['true_url']})",
                         color=discord.Color(0x000001)
                         )
                     await ctx.send(embed=embed)
 
 
+
+    def _schedule_after_song(self, ctx, error):
+        future = asyncio.run_coroutine_threadsafe(self.after_song(ctx, error), self.bot.loop)
+
+        def _log_future_exception(done_future):
+            exc = done_future.exception()
+            if exc:
+                print(f'Erro ao executar after_song: {exc}')
+
+        future.add_done_callback(_log_future_exception)
 
     def add_to_queue(self, ctx, info):
         if ctx.guild.id not in queue:
@@ -76,16 +88,16 @@ class Musica(commands.Cog):
             'title': info.get('title', 'Sem título'),
             'requested_by': ctx.author
             })
-    def after_song(self, ctx, error):
+    async def after_song(self, ctx, error):
         guild_id = ctx.guild.id
         if error:
             print(f'Ocorreu um erro: {error}')
         
         if guild_id in self.loop_state and self.loop_state[guild_id]:
             queue[guild_id].insert(0, self.current_song[guild_id])
-            asyncio.run_coroutine_threadsafe(self.play_next(ctx), self.bot.loop)
+            await self.play_next(ctx)
         else:
-            asyncio.run_coroutine_threadsafe(self.play_next(ctx), self.bot.loop)
+            await self.play_next(ctx)
 
     def yt_search(self, query):
         try:
@@ -315,9 +327,9 @@ class Musica(commands.Cog):
     async def queue(self, ctx):
         queue_list = []
         if ctx.voice_client and ctx.voice_client.is_playing():
-            queue_list.append(f'1 - **{self.current_song[ctx.guild.id].get('title', 'Sem título')}** *Tocando agora*')
+            queue_list.append(f"1 - **{self.current_song[ctx.guild.id].get('title', 'Sem título')}** *Tocando agora*")
             for i, title in enumerate(queue[ctx.guild.id]):
-                queue_list.append(f'{i+2} - **{title.get('title', 'Sem título')}**')
+                queue_list.append(f"{i+2} - **{title.get('title', 'Sem título')}**")
 
             queue_message = '\n'.join(queue_list)
             try:
